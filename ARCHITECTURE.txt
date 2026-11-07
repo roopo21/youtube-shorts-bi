@@ -9,7 +9,7 @@ Viewer -> Netlify same-origin /api/feed and /api/events proxy -> Supabase Edge F
 The Netlify proxy adds a server-only scoped token; the Edge Function verifies its hash before processing requests. Browsers never receive that token or a service-role key. HttpOnly session cookies are forwarded through the same origin for WebView compatibility.
 
 Owner -> password-protected Netlify /admin -> Netlify curation API -> existing Supabase ytshorts-data bridge and YouTube Data API v3.
-Read the generated owner username/password from your private local .env; never commit it. Curation and review are restricted to the owner credentials. Discovery is manual or independently run with npm run curate; no new recurring schedule was created.
+Read the generated owner username/password from your private local .env; never commit it. Curation and review are restricted to the owner credentials. Discovery runs every six hours through a Netlify internal schedule and an authenticated background job. Manual review/refresh and npm run curate remain available.
 
 Feed policy: mixed Hindi/Marathi, two shuffled entertainment impressions then one information impression. Informational reels may repeat; each showing has an independent watch record. Entertainment avoids repeats while unseen catalogue entries remain. Curation updates the catalogue without rebuilding the viewer.
 
@@ -20,3 +20,5 @@ npm test: regression tests.
 Netlify CLI deploy: npx netlify-cli@27.16.2 deploy --prod --no-build
 Supabase function source: supabase/functions/ytshorts-feed/index.ts (generated from worker/ modules).
 Compiled build/ is viewer assets only; the full Netlify deployment also bundles the API function. A static folder alone needs an existing /api proxy to the deployed backend.
+
+Automatic discovery is metadata-based and respects review rules. It does not automatically approve unknown sources, guarantee language tags or replace the curator's review. Scheduled execution starts on the next scheduled production tick; job status remains visible in refresh metrics.

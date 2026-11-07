@@ -26,6 +26,6 @@ The Netlify function keeps feed requests and tracking on the viewer's origin, pr
 
 Important: dropping ONLY build into Netlify's manual upload box publishes static files but does not deploy this API function. Use the repository-based build above for the complete working app.
 
-Curation remains independent. Run npm run curate on your backend/scheduler with the same server environment, or use the protected curator. No new discovery scheduler is enabled on Netlify by this setup. Changes to the Supabase catalogue appear without rebuilding the viewer.
+Curation remains independent. Netlify queues discovery every six hours. You can also run npm run curate with the same server environment, or use the protected curator. Netlify runs curation-schedule every six hours; it queues the authenticated curation-background function. Changes to the Supabase catalogue appear without rebuilding the viewer.
 
 Local verification: npm run build; npm test. Netlify infrastructure routing/bundling is only fully verified after an actual Netlify deployment. Deployment URL: https://youtube-shorts-bi-roopo21.netlify.app (see deployment status at delivery).
