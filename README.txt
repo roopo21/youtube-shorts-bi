@@ -37,9 +37,9 @@ FEED EXPERIMENT
 - No language chooser. Hindi and Marathi mix by default; each record retains its actual language label.
 - Every complete group is entertainment, entertainment, information. A 15-item batch has 10 entertainment and 5 informational impressions.
 - Informational reels MAY REPEAT, including multiple times in a batch. Unseen information is prioritized before reusing previously issued/viewed information. Every occurrence gets its own impression ID and watch measurements.
-- Entertainment shuffles on every feed request. Viewed entertainment is excluded for 24 hours within the anonymous session; queued entertainment is excluded by the viewer while scrolling. This is not an account-wide watch history.
-- A channel contributes at most two entertainment videos per batch. Adjacent channels differ where alternatives exist. Information repeats are exempt from the entertainment channel cap.
-- With no eligible information, the feed pauses rather than breaking the ratio. With insufficient unseen entertainment, it returns the last complete triple. Repeated information continues as long as entertainment remains available.
+- Entertainment shuffles on every feed request. Viewed or already queued entertainment is deprioritized while unseen items remain, then allowed again after exhaustion. This is not an account-wide watch history.
+- Channel diversity prefers at most two entertainment videos per creator per batch, relaxing this when necessary to keep scrolling. Adjacent channels differ where alternatives exist. Information repeats are exempt from the entertainment channel cap.
+- With no eligible information, the feed pauses rather than breaking the ratio. After entertainment exhaustion, the catalogue is reshuffled and reused indefinitely. Both content types can repeat; each occurrence has a separate impression.
 - Each reload generates a shuffled feed. The native app can call window.shortlistShuffle(); no extra viewer button/header is added.
 - A single YouTube iframe is mounted at a time. Autoplay starts muted. YouTube branding remains subject to YouTube's player behavior.
 

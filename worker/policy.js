@@ -16,21 +16,21 @@ export function classify(video,expectedLanguage,trusted=false,topic='skills'){
  return {status:trusted?'approved':'pending',language:audio,duration:seconds,reason:trusted?'approved_source_audio_match':'source_review_required',topic};
 }
 export function balanced(rows,limit=15,random=Math.random,previousChannel=null,offset=0){
- const groups=Object.fromEntries(TOPICS.map(t=>[t,[]]));for(const row of rows)groups[row.topic]?.push(row);
- for(const group of Object.values(groups))for(let i=group.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[group[i],group[j]]=[group[j],group[i]];}
- for(const group of Object.values(groups))group.sort((a,b)=>Number(!!b.previouslySeen)-Number(!!a.previouslySeen));
- const fun=['brainrot','entertainment'],useful=TOPICS.filter(t=>!fun.includes(t));let funCursor=0,usefulCursor=0,lastChannel=previousChannel;const channelCounts=new Map();
- const informationRows=rows.filter(v=>useful.includes(v.topic));
+ const fun=['brainrot','entertainment'],useful=TOPICS.filter(t=>!fun.includes(t));
+ const groups=Object.fromEntries(TOPICS.map(t=>[t,[]]));
+ function shuffle(group){for(let i=group.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[group[i],group[j]]=[group[j],group[i]];}}
+ function refill(source,repeated=false){for(const row of source)groups[row.topic]?.push(repeated?{...row,previouslySeen:true}:row);for(const group of Object.values(groups)){shuffle(group);group.sort((a,b)=>Number(!!b.previouslySeen)-Number(!!a.previouslySeen));}}
+ refill(rows);
+ let funCursor=0,usefulCursor=0,lastChannel=previousChannel;const counts=new Map();
  const channel=v=>v.channel_id||v.source_url||('video:'+v.id);
- function take(pool,isFun,allowRepeat=false){for(let tries=0;tries<pool.length;tries++){const cursor=isFun?funCursor++:usefulCursor++;const group=groups[pool[cursor%pool.length]];for(let i=group.length-1;i>=0;i--){const key=channel(group[i]);if(isFun&&(channelCounts.get(key)||0)>=2)continue;if(!allowRepeat&&key===lastChannel)continue;return group.splice(i,1)[0];}}return null;}
+ function take(pool,isFun,adjacent=false,ignoreCap=false,seen=false){for(let tries=0;tries<pool.length;tries++){const cursor=isFun?funCursor++:usefulCursor++,group=groups[pool[cursor%pool.length]];for(let i=group.length-1;i>=0;i--){const row=group[i],key=channel(row);if(isFun&&!seen&&row.previouslySeen)continue;if(isFun&&!ignoreCap&&(counts.get(key)||0)>=2)continue;if(!adjacent&&key===lastChannel)continue;return group.splice(i,1)[0];}}return null;}
+ function entertainment(){for(const seen of [false,true]){const item=take(fun,true,false,false,seen)||take(fun,true,false,true,seen)||take(fun,true,true,false,seen)||take(fun,true,true,true,seen);if(item)return item;}return null;}
+ const funRows=rows.filter(v=>fun.includes(v.topic)),infoRows=rows.filter(v=>useful.includes(v.topic));
  const result=[];while(result.length<limit){
-  const wantFun=(offset+result.length)%3!==2;
-  let item=take(wantFun?fun:useful,wantFun)||take(wantFun?fun:useful,wantFun,true);
-  if(!item&&!wantFun&&informationRows.length){for(const row of informationRows)groups[row.topic].push(row);for(const group of useful.map(t=>groups[t]))for(let i=group.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[group[i],group[j]]=[group[j],group[i]];}item=take(useful,false)||take(useful,false,true);}
-  if(!item)break;
-  const key=channel(item);channelCounts.set(key,(channelCounts.get(key)||0)+1);lastChannel=key;result.push(item);
+  const wantFun=(offset+result.length)%3!==2;let item=wantFun?entertainment():(take(useful,false)||take(useful,false,true));
+  if(!item){const source=wantFun?funRows:infoRows;if(!source.length)break;refill(source,true);item=wantFun?entertainment():(take(useful,false)||take(useful,false,true));}
+  if(!item)break;const key=channel(item);counts.set(key,(counts.get(key)||0)+1);lastChannel=key;result.push(item);
  }
- // Complete triples keep the experiment exact. Never substitute entertainment for information.
  const trailing=(offset+result.length)%3;if(trailing)result.splice(Math.max(0,result.length-trailing));
  return result;
 }

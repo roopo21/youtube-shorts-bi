@@ -5,13 +5,13 @@ const slots=[];
 let muted=true;
 function showNotice(text){notice.textContent=text;notice.hidden=false;}
 function parseIds(values){if(!Array.isArray(values)||values.length>100)throw Error('This collection must contain between 1 and 100 video IDs.');const result=values.map(v=>typeof v==='string'?v:v?.id);if(!result.every(id=>/^[\w-]{11}$/.test(id||'')))throw Error('This collection contains an invalid YouTube video ID.');return result;}
-let selectedLanguage=null,loadingMore=false,noMore=false;
+let selectedLanguage=null,loadingMore=false,retryAt=0,retryTimer=null,totalLoaded=0,baseOffset=0,issuedIds=[];
 let feedItems=[],playbackTimer=null,viewSent=false,watchSeconds=0,lastMediaTime=0,lastReported=0;
 const API_BASE=(window.SHORTLIST_CONFIG?.apiBase||'').replace(/\/$/,'');
 const apiFetch=(path,options={})=>fetch(API_BASE+path,{credentials:'include',...options});
-function requestFeed(){return apiFetch('/api/feed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset:ids.length,afterChannel:feedItems.at(-1)?.channel_id||'',exclude:ids.slice(-3000)})});}
+function requestFeed(){return apiFetch('/api/feed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset:totalLoaded,afterChannel:feedItems.at(-1)?.channel_id||'',exclude:issuedIds})});}
 async function collection(){
- selectedLanguage='mixed';const response=await requestFeed();const data=await response.json();if(disposed)return [];if(!response.ok)throw Error(data.error||'Feed unavailable.');feedItems=data.videos;
+ selectedLanguage='mixed';const response=await requestFeed();const data=await response.json();if(disposed)return [];if(!response.ok)throw Error(data.error||'Feed unavailable.');feedItems=data.videos;totalLoaded=feedItems.length;issuedIds=[...new Set(feedItems.map(v=>v.id))];
  if(!feedItems.length){showNotice(data.status==='insufficient_balanced_content'?'More informational videos are being curated. Please come back later.':'No more videos right now. Please come back later.');return [];}
  return parseIds(feedItems);
 }
@@ -33,13 +33,15 @@ function select(index){if(!apiReady||index<0||index>=ids.length||document.hidden
  });
 }
 function closest(){let best=-1,ratio=0;slots.forEach((s,i)=>{const r=s.section.getBoundingClientRect(),f=feed.getBoundingClientRect();const v=Math.max(0,Math.min(r.bottom,f.bottom)-Math.max(r.top,f.top))/r.height;if(v>ratio){ratio=v;best=i}});return ratio>.55?best:-1;}
-function update(){const next=closest();if(next>=0)select(next);if(player&&ready){if(document.hidden||active<0||!visibleEnough(slots[active])){player.pauseVideo();pausedForScroll=true;}else if(pausedForScroll){pausedForScroll=false;player.playVideo();}}}
-function appendSlots(start){ids.slice(start).forEach((id,offset)=>{const i=start+offset;const section=document.createElement('section');section.className='short';section.setAttribute('aria-label','Short '+(i+1)+' of '+ids.length);const mount=document.createElement('div');mount.className='player';const message=document.createElement('p');message.className='message';message.hidden=true;const retry=document.createElement('button');retry.className='retry';retry.textContent='Tap to play';retry.hidden=true;retry.onclick=()=>{if(player&&ready&&active===i)player.playVideo()};section.append(mount,message,retry);feed.append(section);slots.push({section,mount,message,retry});if(observer)observer.observe(section);});}
+function update(){const next=closest();if(next>=0)select(next);if(active>=ids.length-3)loadMore();if(player&&ready){if(document.hidden||active<0||!visibleEnough(slots[active])){player.pauseVideo();pausedForScroll=true;}else if(pausedForScroll){pausedForScroll=false;player.playVideo();}}}
+function appendSlots(start){ids.slice(start).forEach((id,offset)=>{const i=start+offset;const section=document.createElement('section');section.className='short';section.setAttribute('aria-label','Short '+(baseOffset+i+1));const mount=document.createElement('div');mount.className='player';const message=document.createElement('p');message.className='message';message.hidden=true;const retry=document.createElement('button');retry.className='retry';retry.textContent='Tap to play';retry.hidden=true;retry.onclick=()=>{if(player&&ready&&slots[active]?.section===section)player.playVideo()};section.append(mount,message,retry);feed.append(section);slots.push({section,mount,message,retry});if(observer)observer.observe(section);});}
 function build(){appendSlots(0);observer=new IntersectionObserver(update,{root:feed,threshold:[0,.55,.65,1]});slots.forEach(s=>observer.observe(s.section));
  window.onYouTubeIframeAPIReady=()=>{if(disposed)return;apiReady=true;update()};if(window.YT?.Player){apiReady=true;update();return;}apiScript=document.createElement('script');apiScript.src='https://www.youtube.com/iframe_api';apiScript.onerror=()=>{if(!disposed)showNotice('YouTube could not load. Check your connection and reload.')};document.head.append(apiScript);
 }
 
-async function loadMore(){if(loadingMore||noMore||!selectedLanguage)return;loadingMore=true;try{const response=await requestFeed();if(!response.ok)return;const data=await response.json();if(disposed)return;const existing=new Set(ids);const additions=data.videos;if(additions.some(v=>['brainrot','entertainment'].includes(v.topic)&&existing.has(v.id)))throw Error('Duplicate entertainment batch.');if(!additions.length){noMore=true;return;}const start=ids.length;feedItems.push(...additions);ids.push(...parseIds(additions));appendSlots(start);slots.forEach((s,i)=>s.section.setAttribute('aria-label','Short '+(i+1)+' of '+ids.length));}catch{}finally{loadingMore=false;}}
+function retryMore(){if(disposed)return;retryAt=Date.now()+3000;clearTimeout(retryTimer);retryTimer=setTimeout(()=>{if(!disposed&&active>=ids.length-3)loadMore()},3100);}
+function prune(){if(slots.length<=180||active<90)return;const oldTop=feed.scrollTop,count=90,height=slots.slice(0,count).reduce((n,s)=>n+s.section.getBoundingClientRect().height,0);for(const slot of slots.splice(0,count)){observer?.unobserve(slot.section);slot.section.remove();}ids.splice(0,count);feedItems.splice(0,count);active-=count;baseOffset+=count;feed.scrollTop=Math.max(0,oldTop-height);}
+async function loadMore(){if(disposed||loadingMore||!selectedLanguage||Date.now()<retryAt)return;loadingMore=true;try{const response=await requestFeed();if(!response.ok){retryMore();return;}const data=await response.json();if(disposed)return;const additions=data.videos;if(!additions.length){retryMore();return;}const start=ids.length;feedItems.push(...additions);ids.push(...parseIds(additions));totalLoaded+=additions.length;issuedIds=[...new Set([...issuedIds,...additions.map(v=>v.id)])].slice(-3000);appendSlots(start);prune();}catch{retryMore();}finally{loadingMore=false;}}
 
 let scrollFrame=0;feed.addEventListener('scroll',()=>{cancelAnimationFrame(scrollFrame);scrollFrame=requestAnimationFrame(update)},{passive:true,signal:listeners.signal});
 feed.addEventListener('keydown',e=>{if(['ArrowDown','ArrowUp','PageDown','PageUp'].includes(e.key)){e.preventDefault();const next=Math.max(0,Math.min(ids.length-1,Math.max(active,0)+(['ArrowDown','PageDown'].includes(e.key)?1:-1)));slots[next]?.section.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}},{signal:listeners.signal});
@@ -53,5 +55,5 @@ collection().then(v=>{if(disposed)return;ids=v;if(ids.length)build();}).catch(e=
 // Optional Android/app control: start a fresh shuffled feed without adding page chrome.
 window.shortlistShuffle=()=>location.reload();
 
-return ()=>{disposed=true;stop();listeners.abort();observer?.disconnect();cancelAnimationFrame(scrollFrame);apiScript?.remove();window.onYouTubeIframeAPIReady=previousReady;delete window.shortlistScroll;delete window.shortlistSetMuted;delete window.shortlistShuffle;feed.replaceChildren();};
+return ()=>{disposed=true;clearTimeout(retryTimer);stop();listeners.abort();observer?.disconnect();cancelAnimationFrame(scrollFrame);apiScript?.remove();window.onYouTubeIframeAPIReady=previousReady;delete window.shortlistScroll;delete window.shortlistSetMuted;delete window.shortlistShuffle;feed.replaceChildren();};
 }

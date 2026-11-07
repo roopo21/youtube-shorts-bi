@@ -30,21 +30,21 @@ function classify(video,expectedLanguage,trusted=false,topic='skills'){
  return {status:trusted?'approved':'pending',language:audio,duration:seconds,reason:trusted?'approved_source_audio_match':'source_review_required',topic};
 }
 function balanced(rows,limit=15,random=Math.random,previousChannel=null,offset=0){
- const groups=Object.fromEntries(TOPICS.map(t=>[t,[]]));for(const row of rows)groups[row.topic]?.push(row);
- for(const group of Object.values(groups))for(let i=group.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[group[i],group[j]]=[group[j],group[i]];}
- for(const group of Object.values(groups))group.sort((a,b)=>Number(!!b.previouslySeen)-Number(!!a.previouslySeen));
- const fun=['brainrot','entertainment'],useful=TOPICS.filter(t=>!fun.includes(t));let funCursor=0,usefulCursor=0,lastChannel=previousChannel;const channelCounts=new Map();
- const informationRows=rows.filter(v=>useful.includes(v.topic));
+ const fun=['brainrot','entertainment'],useful=TOPICS.filter(t=>!fun.includes(t));
+ const groups=Object.fromEntries(TOPICS.map(t=>[t,[]]));
+ function shuffle(group){for(let i=group.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[group[i],group[j]]=[group[j],group[i]];}}
+ function refill(source,repeated=false){for(const row of source)groups[row.topic]?.push(repeated?{...row,previouslySeen:true}:row);for(const group of Object.values(groups)){shuffle(group);group.sort((a,b)=>Number(!!b.previouslySeen)-Number(!!a.previouslySeen));}}
+ refill(rows);
+ let funCursor=0,usefulCursor=0,lastChannel=previousChannel;const counts=new Map();
  const channel=v=>v.channel_id||v.source_url||('video:'+v.id);
- function take(pool,isFun,allowRepeat=false){for(let tries=0;tries<pool.length;tries++){const cursor=isFun?funCursor++:usefulCursor++;const group=groups[pool[cursor%pool.length]];for(let i=group.length-1;i>=0;i--){const key=channel(group[i]);if(isFun&&(channelCounts.get(key)||0)>=2)continue;if(!allowRepeat&&key===lastChannel)continue;return group.splice(i,1)[0];}}return null;}
+ function take(pool,isFun,adjacent=false,ignoreCap=false,seen=false){for(let tries=0;tries<pool.length;tries++){const cursor=isFun?funCursor++:usefulCursor++,group=groups[pool[cursor%pool.length]];for(let i=group.length-1;i>=0;i--){const row=group[i],key=channel(row);if(isFun&&!seen&&row.previouslySeen)continue;if(isFun&&!ignoreCap&&(counts.get(key)||0)>=2)continue;if(!adjacent&&key===lastChannel)continue;return group.splice(i,1)[0];}}return null;}
+ function entertainment(){for(const seen of [false,true]){const item=take(fun,true,false,false,seen)||take(fun,true,false,true,seen)||take(fun,true,true,false,seen)||take(fun,true,true,true,seen);if(item)return item;}return null;}
+ const funRows=rows.filter(v=>fun.includes(v.topic)),infoRows=rows.filter(v=>useful.includes(v.topic));
  const result=[];while(result.length<limit){
-  const wantFun=(offset+result.length)%3!==2;
-  let item=take(wantFun?fun:useful,wantFun)||take(wantFun?fun:useful,wantFun,true);
-  if(!item&&!wantFun&&informationRows.length){for(const row of informationRows)groups[row.topic].push(row);for(const group of useful.map(t=>groups[t]))for(let i=group.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[group[i],group[j]]=[group[j],group[i]];}item=take(useful,false)||take(useful,false,true);}
-  if(!item)break;
-  const key=channel(item);channelCounts.set(key,(channelCounts.get(key)||0)+1);lastChannel=key;result.push(item);
+  const wantFun=(offset+result.length)%3!==2;let item=wantFun?entertainment():(take(useful,false)||take(useful,false,true));
+  if(!item){const source=wantFun?funRows:infoRows;if(!source.length)break;refill(source,true);item=wantFun?entertainment():(take(useful,false)||take(useful,false,true));}
+  if(!item)break;const key=channel(item);counts.set(key,(counts.get(key)||0)+1);lastChannel=key;result.push(item);
  }
- // Complete triples keep the experiment exact. Never substitute entertainment for information.
  const trailing=(offset+result.length)%3;if(trailing)result.splice(Math.max(0,result.length-trailing));
  return result;
 }
@@ -85,8 +85,8 @@ function createApp(assets={}){return async function handle(request,env,ctx={wait
  const requested=url.searchParams.get('lang')||'mixed',lang=requested==='mixed'?'mixed':language(requested);
  const languages=lang==='mixed'?['hi','mr']:[lang];
  const available=(await Promise.all(languages.map(l=>rows(statement(env,'feed_catalogue').bind(l,Date.now()-THIRTY_DAYS))))).flat();const s=await session(request,env,lang);
- const seen=await rows(statement(env,'session_seen').bind(s.id,Date.now()-86400000));const seenIds=new Set(seen.map(v=>v.video_id));const exclude=new Set((Array.isArray(feedOptions.exclude)?feedOptions.exclude.join(','):(url.searchParams.get('exclude')||'')).split(',').filter(id=>/^[\w-]{11}$/.test(id)).slice(0,3000));const unseen=available.filter(v=>!['brainrot','entertainment'].includes(v.topic)||(!seenIds.has(v.id)&&!exclude.has(v.id)));const offset=Number(feedOptions.offset??url.searchParams.get('offset')??0);if(!Number.isSafeInteger(offset)||offset<0||offset>100000)throw fail('Invalid feed position.');const selected=balanced(unseen.map(v=>({...v,previouslySeen:seenIds.has(v.id)||exclude.has(v.id)})),15,Math.random,feedOptions.afterChannel||url.searchParams.get('afterChannel'),offset);const items=selected.map(v=>({...v,impressionId:crypto.randomUUID()}));if(items.length)await batch(env,items.map(v=>statement(env,'impression_insert').bind(v.impressionId,s.id,v.id,v.language,v.topic,Date.now())));
- return json({language:lang,videos:items,status:items.length?'ready':unseen.length?'insufficient_balanced_content':available.length?'caught_up':'awaiting_approved_content',mix:{entertainment:2,information:1},refresh:null},200,s.cookie?{'Set-Cookie':s.cookie}:{});
+ const seen=await rows(statement(env,'session_seen').bind(s.id,Date.now()-86400000));const seenIds=new Set(seen.map(v=>v.video_id));const exclude=new Set((Array.isArray(feedOptions.exclude)?feedOptions.exclude.join(','):(url.searchParams.get('exclude')||'')).split(',').filter(id=>/^[\w-]{11}$/.test(id)).slice(0,3000));const unseen=available;const offset=Number(feedOptions.offset??url.searchParams.get('offset')??0);if(!Number.isSafeInteger(offset)||offset<0)throw fail('Invalid feed position.');const selected=balanced(unseen.map(v=>({...v,previouslySeen:seenIds.has(v.id)||exclude.has(v.id)})),15,Math.random,feedOptions.afterChannel||url.searchParams.get('afterChannel'),offset);const items=selected.map(v=>({...v,impressionId:crypto.randomUUID()}));if(items.length)await batch(env,items.map(v=>statement(env,'impression_insert').bind(v.impressionId,s.id,v.id,v.language,v.topic,Date.now())));
+ return json({language:lang,videos:items,status:items.length?'ready':unseen.length?'insufficient_balanced_content':available.length?'caught_up':'awaiting_approved_content',mix:{entertainment:2,information:1},repeatsAllowed:true,refresh:null},200,s.cookie?{'Set-Cookie':s.cookie}:{});
  }
  if(path==='/api/events'&&request.method==='POST'){
  const b=await body(request),sid=/\bshortlist_session=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/.exec(request.headers.get('cookie')||'')?.[1];if(!sid)throw fail('Load a feed first.',401);if(typeof b.impressionId!=='string'||!['view','progress'].includes(b.type))throw fail('Invalid event.');if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(b.impressionId))throw fail('Unknown impression.',404);const impression=await statement(env,'impression_get').bind(b.impressionId,sid,Date.now()-86400000).first();if(!impression)throw fail('Unknown impression.',404);const seconds=Number(b.watchSeconds||0);if(!Number.isFinite(seconds)||seconds<0||seconds>600)throw fail('Invalid watch duration.');let duration=impression.duration;const reportedDuration=Number(b.videoDuration||0);if(!duration&&Number.isFinite(reportedDuration)&&reportedDuration>=1&&reportedDuration<=180){duration=Math.ceil(reportedDuration);await statement(env,'discovery_duration').bind(impression.video_id,duration).run();}const elapsed=Math.max(0,Math.floor((Date.now()-impression.created_at)/1000)+2),safe=Math.min(Math.floor(seconds),elapsed,duration||180);const completed=duration>0&&safe>=duration*.9?1:0;await statement(env,'impression_progress').bind(safe,completed,b.impressionId).run();return json({ok:true});

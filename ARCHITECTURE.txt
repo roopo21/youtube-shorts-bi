@@ -11,7 +11,7 @@ The Netlify proxy adds a server-only scoped token; the Edge Function verifies it
 Owner -> password-protected Netlify /admin -> Netlify curation API -> existing Supabase ytshorts-data bridge and YouTube Data API v3.
 Read the generated owner username/password from your private local .env; never commit it. Curation and review are restricted to the owner credentials. Discovery runs every six hours through a Netlify internal schedule and an authenticated background job. Manual review/refresh and npm run curate remain available.
 
-Feed policy: mixed Hindi/Marathi, two shuffled entertainment impressions then one information impression. Informational reels may repeat; each showing has an independent watch record. Entertainment avoids repeats while unseen catalogue entries remain. Curation updates the catalogue without rebuilding the viewer.
+Feed policy: mixed Hindi/Marathi, two shuffled entertainment impressions then one information impression. Informational reels may repeat; each showing has an independent watch record. Entertainment prioritizes unseen catalogue entries, then reshuffles and repeats indefinitely after exhaustion. Curation updates the catalogue without rebuilding the viewer.
 
 Local project: /Users/roopo/Desktop/Shortlist
 npm run dev: Vite development UI (local backend npm start in another terminal).
@@ -22,3 +22,5 @@ Supabase function source: supabase/functions/ytshorts-feed/index.ts (generated f
 Compiled build/ is viewer assets only; the full Netlify deployment also bundles the API function. A static folder alone needs an existing /api proxy to the deployed backend.
 
 Automatic discovery is metadata-based and respects review rules. It does not automatically approve unknown sources, guarantee language tags or replace the curator's review. Scheduled execution starts on the next scheduled production tick; job status remains visible in refresh metrics.
+
+Infinite scroll retains a bounded window of viewer DOM sections and retries temporary API failures. Content repeats after exhaustion, preserving two entertainment impressions and one informational impression per triple.
