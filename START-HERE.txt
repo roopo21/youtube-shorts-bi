@@ -1,0 +1,20 @@
+SHORTLIST — YOUR LOCAL PROJECT
+
+In Terminal:
+  cd /Users/roopo/Desktop/Shortlist
+  npm start
+
+Open http://localhost:4175
+
+The private .env is configured for the existing Supabase backend. Curator username is curator; read ADMIN_PASSWORD from .env for the generated local password. Never commit .env or copy it into the viewer build.
+
+Viewer web build: build/
+Build again: npm run build
+Tests: npm test
+Independent content discovery: npm run curate
+Full setup: README.txt
+Android: android/MainActivity.kt.example
+
+This is a web build for WebView, not an APK. ChatGPT Sites is no longer part of the local development workflow. The previous hosted Site still exists; it has not been deleted.
+
+Host the whole app on Netlify: follow NETLIFY-SETUP.txt. Repository builds include the viewer and serverless API.

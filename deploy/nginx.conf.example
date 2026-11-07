@@ -1,0 +1,9 @@
+# Put this in your HTTPS server block. Viewer and API can run on separate machines.
+root /srv/shortlist/build;
+location / { try_files $uri $uri/ /index.html; }
+location /api/ {
+    proxy_pass http://YOUR_BACKEND_HOST:4174;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+}
+# Curator is hosted on the backend separately, behind HTTPS + Basic authentication.

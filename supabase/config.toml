@@ -1,0 +1,8 @@
+[functions.ytshorts-data]
+verify_jwt = false
+# This server-only endpoint validates X-Ytshorts-Token against a SHA-256 hash in
+# ytshorts_settings before allowing any explicitly named database operation.
+
+[functions.ytshorts-feed]
+verify_jwt = false
+# Authenticates the server-only scoped token before serving feed/events; no admin routes.

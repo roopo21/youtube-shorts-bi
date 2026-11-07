@@ -1,0 +1,22 @@
+SHORTLIST — REACT / NETLIFY / SUPABASE
+
+Viewer: React + Vite; source src/, compiled output build/.
+Public URL: https://youtube-shorts-bi-roopo21.netlify.app/
+Private curator: https://youtube-shorts-bi-roopo21.netlify.app/admin
+Git repository: https://github.com/roopo21/youtube-shorts-bi
+
+Viewer -> Netlify same-origin /api/feed and /api/events proxy -> Supabase Edge Function ytshorts-feed -> ytshorts_data_operation RPC -> ytshorts_ tables.
+The Netlify proxy adds a server-only scoped token; the Edge Function verifies its hash before processing requests. Browsers never receive that token or a service-role key. HttpOnly session cookies are forwarded through the same origin for WebView compatibility.
+
+Owner -> password-protected Netlify /admin -> Netlify curation API -> existing Supabase ytshorts-data bridge and YouTube Data API v3.
+Read the generated owner username/password from your private local .env; never commit it. Curation and review are restricted to the owner credentials. Discovery is manual or independently run with npm run curate; no new recurring schedule was created.
+
+Feed policy: mixed Hindi/Marathi, two shuffled entertainment impressions then one information impression. Informational reels may repeat; each showing has an independent watch record. Entertainment avoids repeats while unseen catalogue entries remain. Curation updates the catalogue without rebuilding the viewer.
+
+Local project: /Users/roopo/Desktop/Shortlist
+npm run dev: Vite development UI (local backend npm start in another terminal).
+npm run build: generate build/ plus the backend artifact and Supabase feed function source.
+npm test: regression tests.
+Netlify CLI deploy: npx netlify-cli@27.16.2 deploy --prod --no-build
+Supabase function source: supabase/functions/ytshorts-feed/index.ts (generated from worker/ modules).
+Compiled build/ is viewer assets only; the full Netlify deployment also bundles the API function. A static folder alone needs an existing /api proxy to the deployed backend.

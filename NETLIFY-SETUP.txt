@@ -1,0 +1,31 @@
+HOST SHORTLIST ON NETLIFY
+
+The viewer uses React with Vite. Netlify serves the React viewer, password-protected curation tools and a same-origin API proxy. Supabase ytshorts-feed serves the viewer feed and records watch events; ytshorts-data is the server-only curation bridge. Supabase remains the database. You do not need to run your laptop server after deployment.
+
+1. Push this Desktop/Shortlist project to your own Git repository. .env is ignored; never commit it.
+2. In Netlify, import that repository as a new project.
+3. netlify.toml supplies these settings automatically:
+   Build command: npm run build && npm test
+   Publish directory: build
+   Functions directory: netlify/functions
+   Node version: 24
+4. Add these server-side environment variables in Netlify (Functions scope, or all scopes if your plan does not offer scope controls). Copy the values from your private local .env:
+   YTSHORTS_DATA_URL
+   YTSHORTS_FEED_URL
+   YTSHORTS_BACKEND_TOKEN
+   SETTINGS_ENCRYPTION_KEY
+   ADMIN_USER
+   ADMIN_PASSWORD
+   ADMIN_EMAIL
+   Optional: YOUTUBE_API_KEY (otherwise the encrypted database key is used).
+   Do not copy HOST, PORT or the localhost PUBLIC_ORIGIN value; the Netlify handler uses the incoming HTTPS request URL.
+5. Deploy. Open the Netlify HTTPS URL to view the feed. Open /admin for curator access using ADMIN_USER and ADMIN_PASSWORD.
+6. Point your Android WebView at that HTTPS URL.
+
+The Netlify function keeps feed requests and tracking on the viewer's origin, preserving session cookies. It authenticates curator routes and strips forged ChatGPT Sites identity headers. The viewer does not depend on ChatGPT Sites.
+
+Important: dropping ONLY build into Netlify's manual upload box publishes static files but does not deploy this API function. Use the repository-based build above for the complete working app.
+
+Curation remains independent. Run npm run curate on your backend/scheduler with the same server environment, or use the protected curator. No new discovery scheduler is enabled on Netlify by this setup. Changes to the Supabase catalogue appear without rebuilding the viewer.
+
+Local verification: npm run build; npm test. Netlify infrastructure routing/bundling is only fully verified after an actual Netlify deployment. Deployment URL: https://youtube-shorts-bi-roopo21.netlify.app (see deployment status at delivery).

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.sites-runtime/
+.wrangler/
+.env*
+.dev.vars*
+*.db
+*.db-*
+outputs/
+
+!.env.example
+*.zip
+
+build/
+.netlify/
+.openai/

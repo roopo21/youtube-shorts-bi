@@ -1,0 +1,14 @@
+// Integration example for your existing Android activity; this is not a complete APK project.
+webView.settings.javaScriptEnabled = true
+webView.settings.domStorageEnabled = true
+webView.settings.mediaPlaybackRequiresUserGesture = false
+webView.webViewClient = android.webkit.WebViewClient()
+webView.webChromeClient = android.webkit.WebChromeClient()
+// Use your deployed HTTPS viewer. Preserve WebView's normal user-agent/referrer.
+webView.loadUrl("https://YOUR_VIEWER_DOMAIN/")
+// Optional native app actions:
+// webView.evaluateJavascript("window.shortlistShuffle()", null)
+// webView.evaluateJavascript("window.shortlistScroll(1)", null)
+// Enable sound after a user gesture:
+// webView.evaluateJavascript("window.shortlistSetMuted(false)", null)
+// In AndroidManifest.xml: <uses-permission android:name="android.permission.INTERNET" />
