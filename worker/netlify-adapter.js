@@ -11,7 +11,9 @@ export async function handleNetlify(request,env,app){
   try{
    const bytes=['GET','HEAD'].includes(request.method)?undefined:await request.arrayBuffer();
    if(bytes?.byteLength>64000)return Response.json({error:'Request too large.'},{status:413});
-   return await fetch(env.YTSHORTS_FEED_URL.replace(/\/$/,'')+path+new URL(request.url).search,{method:request.method,headers:upstreamHeaders,...(bytes?{body:bytes}:{}),signal:AbortSignal.timeout(30000)});
+   const upstream=await fetch(env.YTSHORTS_FEED_URL.replace(/\/$/,'')+path+new URL(request.url).search,{method:request.method,headers:upstreamHeaders,...(bytes?{body:bytes}:{}),signal:AbortSignal.timeout(30000)});
+   const responseHeaders=new Headers(upstream.headers);responseHeaders.delete('content-encoding');responseHeaders.delete('content-length');
+   return new Response(upstream.body,{status:upstream.status,headers:responseHeaders});
   }catch{return Response.json({error:'Feed service unavailable.'},{status:503});}
  }
 

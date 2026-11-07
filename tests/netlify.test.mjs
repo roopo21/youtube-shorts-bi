@@ -29,3 +29,13 @@ test('Netlify function entry serves protected curator assets with valid authenti
  try{const response=await handler(new Request('https://example.netlify.app/admin',{headers:{authorization:auth}}));assert.equal(response.status,200);assert.match(await response.text(),/<!doctype html>/i);assert.ok(config.path.includes('/api/*'));}
  finally{for(const [key,value] of Object.entries(saved))if(value===undefined)delete process.env[key];else process.env[key]=value;}
 });
+
+test('Netlify feed proxy forwards cookies and strips upstream compression headers',async()=>{
+ const original=globalThis.fetch;let target,options;
+ globalThis.fetch=async(url,init)=>{target=url;options=init;return new Response('{"videos":[]}',{headers:{'Content-Type':'application/json','Content-Encoding':'gzip','Content-Length':'999','Set-Cookie':'shortlist_session=test; Secure; HttpOnly','X-Shortlist-Feed':'supabase-edge'}})};
+ try{
+  const request=new Request('https://example.netlify.app/api/feed',{method:'POST',headers:{cookie:'shortlist_session=test','Content-Type':'application/json','X-Ytshorts-Token':'attacker'},body:'{}'});
+  const response=await handleNetlify(request,{...env,YTSHORTS_FEED_URL:'https://db.example/functions/v1/ytshorts-feed',YTSHORTS_BACKEND_TOKEN:'server-only'},()=>{throw Error('Must reach Edge')});
+  assert.equal(target,'https://db.example/functions/v1/ytshorts-feed/api/feed');assert.equal(options.headers.get('X-Ytshorts-Token'),'server-only');assert.equal(options.headers.get('X-Shortlist-Public-Origin'),'https://example.netlify.app');assert.equal(options.headers.get('cookie'),'shortlist_session=test');assert.equal(response.headers.get('content-encoding'),null);assert.equal(response.headers.get('content-length'),null);assert.match(response.headers.get('set-cookie'),/Secure/);assert.deepEqual(await response.json(),{videos:[]});
+ }finally{globalThis.fetch=original;}
+});
